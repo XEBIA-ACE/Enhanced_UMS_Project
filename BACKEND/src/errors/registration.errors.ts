@@ -38,6 +38,22 @@ export class UsernameConflictError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// Email uniqueness (US-014)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliberately carries NO email value: the message and payload must never
+ * echo or enumerate registered addresses.
+ */
+export class EmailConflictError extends Error {
+  constructor() {
+    super('This email address is already in use.');
+    this.name = 'EmailConflictError';
+    Object.setPrototypeOf(this, EmailConflictError.prototype);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Activation token errors (US-074)
 // ---------------------------------------------------------------------------
 

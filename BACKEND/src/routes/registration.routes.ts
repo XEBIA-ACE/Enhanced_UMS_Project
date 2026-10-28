@@ -11,6 +11,7 @@ import { Redis } from 'ioredis';
 import { DefaultRegistrationValidator } from '../validators/registration.validator';
 import { DefaultEmailValidator } from '../validators/email.validator';
 import { DefaultPasswordPolicyEvaluator } from '../validators/password-policy.evaluator';
+import { DefaultEmailUniquenessValidator } from '../validators/email-uniqueness.validator';
 import { DefaultUsernameUniquenessValidator } from '../validators/username-uniqueness.validator';
 import { UserRepository } from '../repositories/user.repository';
 import { OtpRequestRepository } from '../repositories/otp-request.repository';
@@ -46,6 +47,7 @@ export function createRegistrationRouter(
     new DefaultEmailValidator(),
     new DefaultPasswordPolicyEvaluator(),
     new DefaultUsernameUniquenessValidator(userRepo),
+    new DefaultEmailUniquenessValidator(userRepo),
     new DefaultRegistrationService(db),
     otpService,
   );

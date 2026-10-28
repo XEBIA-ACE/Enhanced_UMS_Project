@@ -32,6 +32,13 @@ export interface RegisterUserUsernameUnavailableErrorResponse {
   suggestion_hint: string;
 }
 
+export interface RegisterUserEmailUnavailableErrorResponse {
+  error_code: "EMAIL_UNAVAILABLE";
+  message: string;
+  field: string;
+  suggestion_hint: string;
+}
+
 export interface RegisterUserGenericErrorResponse {
   error: string;
 }
@@ -40,4 +47,5 @@ export type RegisterUserErrorResponse =
   | RegisterUserValidationErrorResponse
   | RegisterUserPasswordPolicyErrorResponse
   | RegisterUserUsernameUnavailableErrorResponse
+  | RegisterUserEmailUnavailableErrorResponse
   | RegisterUserGenericErrorResponse;

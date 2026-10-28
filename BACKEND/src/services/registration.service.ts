@@ -21,7 +21,7 @@ import type { Database } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { withTransaction } from '../db/with-transaction';
 import { RegistrationRequestDto, UserCreatedResult } from '../types/registration.types';
-import { UsernameConflictError } from '../errors/registration.errors';
+import { EmailConflictError, UsernameConflictError } from '../errors/registration.errors';
 import { appConfig } from '../config/app.config';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +78,10 @@ export class DefaultRegistrationService implements RegistrationService {
         message: 'Registration successful. Please check your email for the verification code to activate your account.',
       };
     } catch (err) {
+      if (isEmailConflictError(err)) {
+        throw new EmailConflictError();
+      }
+
       if (isUsernameConflictError(err)) {
         throw new UsernameConflictError(usernameNormalised);
       }
@@ -85,6 +89,18 @@ export class DefaultRegistrationService implements RegistrationService {
       throw err;
     }
   }
+}
+
+/** Race-safe backstop: the `uidx_users_email` UNIQUE index rejected the insert. */
+function isEmailConflictError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+    'message' in err &&
+    (err as { message: string }).message.includes('users.email')
+  );
 }
 
 function isUsernameConflictError(err: unknown): err is { code: string; message: string } {
