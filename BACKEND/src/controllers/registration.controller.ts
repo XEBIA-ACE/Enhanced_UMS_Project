@@ -9,6 +9,7 @@
  *   2. Email format (structural regex)
  *   3. Password policy (complexity rules)
  *   4. Username uniqueness (DB check)
+ *   4b. Email uniqueness (DB check, US-014)
  *   5. Register (atomic DB inserts)
  *
  * Requirements: US-062 FR-001–002, US-063 FR-001/FR-008, US-064 FR-004–005,
@@ -19,12 +20,22 @@ import { Request, Response } from 'express';
 import { RegistrationValidator } from '../validators/registration.validator';
 import { EmailValidator } from '../validators/email.validator';
 import { PasswordPolicyEvaluator } from '../validators/password-policy.evaluator';
+import { EmailUniquenessValidator } from '../validators/email-uniqueness.validator';
 import { UsernameUniquenessValidator } from '../validators/username-uniqueness.validator';
 import { RegistrationService } from '../services/registration.service';
 import { OtpService } from '../services/otp.service';
 import { RegistrationRequestDto } from '../types/registration.types';
-import { ValidationError, UsernameConflictError } from '../errors/registration.errors';
+import { ValidationError, UsernameConflictError, EmailConflictError } from '../errors/registration.errors';
 import { passwordPolicyConfig } from '../config/password-policy.config';
+
+function emailUnavailableBody(err: EmailConflictError) {
+  return {
+    error_code: 'EMAIL_UNAVAILABLE',
+    message: err.message,
+    field: 'emailAddress',
+    suggestion_hint: 'Please use a different email address.',
+  };
+}
 
 export class RegistrationController {
   constructor(
@@ -32,6 +43,7 @@ export class RegistrationController {
     private readonly emailValidator: EmailValidator,
     private readonly passwordPolicyEvaluator: PasswordPolicyEvaluator,
     private readonly usernameValidator: UsernameUniquenessValidator,
+    private readonly emailUniquenessValidator: EmailUniquenessValidator,
     private readonly registrationService: RegistrationService,
     private readonly otpService: OtpService,
   ) {}
@@ -92,6 +104,17 @@ export class RegistrationController {
       throw err;
     }
 
+    // --- Stage 4b: Email uniqueness check (US-014) ---
+    try {
+      await this.emailUniquenessValidator.checkUniqueness(dto.emailAddress);
+    } catch (err) {
+      if (err instanceof EmailConflictError) {
+        res.status(409).json(emailUnavailableBody(err));
+        return;
+      }
+      throw err;
+    }
+
     // --- Stage 5: Register user (US-073) ---
     try {
       const result = await this.registrationService.register(dto);
@@ -111,6 +134,11 @@ export class RegistrationController {
           field: 'username',
           suggestion_hint: 'Please choose a different username.',
         });
+        return;
+      }
+
+      if (err instanceof EmailConflictError) {
+        res.status(409).json(emailUnavailableBody(err));
         return;
       }
 

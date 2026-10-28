@@ -229,6 +229,12 @@ export function RegistrationForm() {
         return;
       }
 
+      if (status === 409 && "error_code" in body && body.error_code === "EMAIL_UNAVAILABLE") {
+        const hint = body.suggestion_hint ? ` ${body.suggestion_hint}` : "";
+        setErrors((prev) => ({ ...prev, email: `${body.message}${hint}` }));
+        return;
+      }
+
       setFormError(
         "error" in body && body.error
           ? body.error

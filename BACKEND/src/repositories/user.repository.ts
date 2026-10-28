@@ -27,6 +27,7 @@ export interface IUserRepository {
   ): Promise<void>;
   // --- F-03 additions ---
   findByEmail(email: string): Promise<UserEntity | null>;
+  findByEmailCaseInsensitive(email: string): Promise<UserEntity | null>;
   incrementFailedLoginCount(id: string): Promise<void>;
   resetFailedLoginCount(id: string): Promise<void>;
   lockAccount(id: string, lockedUntil: Date): Promise<void>;
@@ -168,6 +169,18 @@ export class UserRepository implements IUserRepository {
     const row = this.db.prepare('SELECT * FROM users WHERE email = ? LIMIT 1').get(email) as
       | UserRow
       | undefined;
+
+    return row === undefined ? null : rowToEntity(row);
+  }
+
+  /**
+   * Case-insensitive email lookup used by the registration uniqueness check
+   * (US-014), so `Foo@x.com` and `foo@x.com` are treated as the same address.
+   */
+  async findByEmailCaseInsensitive(email: string): Promise<UserEntity | null> {
+    const row = this.db
+      .prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1')
+      .get(email) as UserRow | undefined;
 
     return row === undefined ? null : rowToEntity(row);
   }
