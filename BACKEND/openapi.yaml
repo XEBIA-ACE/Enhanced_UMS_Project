@@ -105,6 +105,29 @@ paths:
         "409": { description: Account is not pending activation }
         "500": { description: Unexpected error }
 
+  /api/v1/admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Admin Dashboard entry point (US-012) — session auth + admin role check
+      description: >
+        Requires a valid session token. After authentication the caller's
+        user id is checked against the admin_accounts table; only active
+        (non-revoked) administrators are granted access.
+      security: [{ SessionBearer: [] }]
+      responses:
+        "200":
+          description: Access granted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access: { type: string, enum: [granted] }
+                  admin_user_id: { type: string, format: uuid }
+        "401": { description: Missing/malformed/invalid/expired session }
+        "403": { description: "ADMIN_ROLE_REQUIRED (authenticated but not an administrator) or AUTH_ACCOUNT_NOT_ACTIVE" }
+        "500": { description: Unexpected error }
+
   /api/v1/otp/send:
     post:
       tags: [OTP]

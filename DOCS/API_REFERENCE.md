@@ -62,6 +62,20 @@ Admin-only: re-queues the activation email for a still-pending user. Not part of
 - **Success — 202**: `{ "message": "Confirmation email enqueue requested." }`
 - **Errors**: 401 (missing/malformed header), 403 (wrong token), 400 (missing user_id), 404 (`{"error":"User not found."}`), 409 (`{"error":"Account is not pending activation."}`), 500
 
+## GET /api/v1/admin/dashboard
+
+Admin Dashboard entry point (US-012). Authenticates the session, then validates the caller's admin role against the SQLite `admin_accounts` table (migration 009). A user is an administrator only if an `admin_accounts` row exists for them with `revoked_at IS NULL`.
+
+- **Auth**: `Authorization: Bearer <session_token>` (from `POST /api/v1/auth/login`)
+- **Success — 200**: `{ "access": "granted", "admin_user_id": "uuid" }`
+- **Errors**:
+  | Status | error_code | Cause |
+  |---|---|---|
+  | 401 | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `SESSION_*` | not authenticated |
+  | 403 | `ADMIN_ROLE_REQUIRED` | authenticated, but not an administrator — `message`: "Unauthorized: administrator role is required to access the Admin Dashboard." |
+  | 403 | `AUTH_ACCOUNT_NOT_ACTIVE` | account suspended/deleted |
+  | 500 | — | unexpected (no admin data returned) |
+
 ## POST /api/v1/otp/send / POST /api/v1/otp/resend
 
 Issues (or re-issues) a one-time code, delivered via **email** (not SMS — intentional deviation, see `docs/IMPLEMENTATION_STATUS.md`). There is no separate OTP-verification endpoint in this codebase.
