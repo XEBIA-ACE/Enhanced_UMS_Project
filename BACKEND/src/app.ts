@@ -181,7 +181,13 @@ export function createApp(
 
   app.use('/api/v1/users', createRegistrationRouter(db, redis, otpDeliveryPort));
   app.use('/api/v1/users', createActivationRouter(db));
-  app.use('/api/v1/admin', createAdminRouter(db));
+  // Shared SessionService for every router guarded by SessionValidationMiddleware
+  // (US-038 A-003): admin dashboard (US-012), deletion (F-04), profile (US-001).
+  const sharedSessionService = new DefaultSessionService(
+    new SessionRepository(db),
+    new UserRepository(db),
+  );
+  app.use('/api/v1/admin', createAdminRouter(db, sharedSessionService));
   app.use('/api/v1/otp', createOtpRouter(db, redis, otpDeliveryPort));
 
   // F-03: User Login — /login, /logout, /password-recovery, /password-reset
@@ -195,10 +201,6 @@ export function createApp(
   // deletion-request routes are authenticated, including /confirm — the OTP
   // code is checked against the caller's own pending request, not looked up
   // as a global unauthenticated credential.
-  const sharedSessionService = new DefaultSessionService(
-    new SessionRepository(db),
-    new UserRepository(db),
-  );
   app.use('/api/v1/users', createDeletionRouter(db, sharedSessionService, emailDeliveryPort));
 
   // GET /api/v1/users/me — the calling user's own profile, reusing the same
