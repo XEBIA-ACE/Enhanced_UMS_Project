@@ -94,6 +94,11 @@ export class DefaultSessionService implements SessionService {
     }
 
     if (new Date() >= session.expiresAt) {
+      // US-010 AC1: enforce the timeout by persisting invalidation the first
+      // time an expired session is seen.
+      if (!session.invalidated) {
+        await this.sessionRepository.markInvalidated(session.id, new Date());
+      }
       return { valid: false, reason: 'EXPIRED' };
     }
 

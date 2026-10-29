@@ -23,6 +23,7 @@ import type {
   RequestDeletionErrorResponse,
   RequestDeletionSuccessResponse,
 } from "../types/deletion.types";
+import { expireSession, isDeadSessionCode } from "./session";
 import type { ProfileErrorResponse, UserProfileResponse } from "../types/profile.types";
 
 // Empty string = same-origin relative URLs (all call paths already start with
@@ -31,6 +32,18 @@ import type { ProfileErrorResponse, UserProfileResponse } from "../types/profile
 // so an explicitly-empty build arg isn't clobbered by a localhost fallback.
 // Local `vite dev` keeps working via the /api proxy in vite.config.ts.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+/**
+ * [US-010-AC2] Any authenticated call that finds the session dead clears it
+ * and sends the user to the login screen, which shows the expiry notice.
+ */
+function handleDeadSession(status: number, body: unknown): void {
+  const code = (body as { error_code?: string } | null)?.error_code;
+  if (status === 401 && isDeadSessionCode(code)) {
+    expireSession();
+    if (window.location.pathname !== "/login") window.location.assign("/login");
+  }
+}
 
 export type ApiResult<TSuccess, TError> =
   | { ok: true; data: TSuccess }
@@ -105,6 +118,8 @@ async function authRequest<TSuccess, TError>(
     return { ok: true, data: body as TSuccess };
   }
 
+  handleDeadSession(response.status, body);
+
   return { ok: false, status: response.status, body: body as TError };
 }
 
@@ -124,6 +139,8 @@ async function authPostJson<TSuccess, TError>(
   if (response.ok) {
     return { ok: true, data: body as TSuccess };
   }
+
+  handleDeadSession(response.status, body);
 
   return { ok: false, status: response.status, body: body as TError };
 }
