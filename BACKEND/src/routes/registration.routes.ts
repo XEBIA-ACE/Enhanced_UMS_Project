@@ -18,7 +18,9 @@ import { OtpRequestRepository } from '../repositories/otp-request.repository';
 import { OtpDispatchOutboxRepository } from '../repositories/otp-dispatch-outbox.repository';
 import { DefaultRegistrationService } from '../services/registration.service';
 import { DefaultOtpService } from '../services/otp.service';
-import { RedisRateLimitGuard } from '../services/rate-limit.guard';
+import { RedisRateLimitGuard, RedisIpRateLimitGuard } from '../services/rate-limit.guard';
+import { createIpRateLimitMiddleware } from '../middleware/ip-rate-limit.middleware';
+import { otpConfig } from '../config/otp.config';
 import { OtpDeliveryPort } from '../adapters/otp-delivery.port';
 import { RegistrationController } from '../controllers/registration.controller';
 
@@ -55,7 +57,9 @@ export function createRegistrationRouter(
   );
 
   // POST /api/v1/users/register  (parent mounts at /api/v1/users)
-  router.post('/register', (req, res) => { void controller.registerUser(req, res); });
+  router.post('/register', createIpRateLimitMiddleware(
+    new RedisIpRateLimitGuard(redis, 'register', otpConfig.otpMaxAttemptsPerWindow, otpConfig.otpRateLimitWindowMinutes),
+  ), (req, res) => { void controller.registerUser(req, res); });
 
   return router;
 }
