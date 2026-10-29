@@ -280,6 +280,70 @@ describe('Integration | Logout and session validation', () => {
     expect(handlerCalls.count).toBe(0);
   });
 
+  describe('US-010 session timeout and expiry', () => {
+    async function loginAndExpire(): Promise<{ email: string; password: string; token: string; tokenHash: string }> {
+      const { email, password } = await registerAndActivateUser();
+      const loginResponse = await request(app).post('/api/v1/auth/login').send({ email, password }).expect(200);
+      const token = loginResponse.body.token as string;
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').run(
+        new Date(Date.now() - 1000).toISOString(),
+        tokenHash,
+      );
+      return { email, password, token, tokenHash };
+    }
+
+    test('[US-010-AC1] a session whose timeout has been reached is persisted as invalidated', async () => {
+      const { token, tokenHash } = await loginAndExpire();
+      const { app: protectedApp } = buildProtectedTestApp();
+
+      await request(protectedApp).get('/protected').set('Authorization', `Bearer ${token}`).expect(401);
+
+      const row = db
+        .prepare('SELECT invalidated, invalidated_at FROM sessions WHERE token_hash = ?')
+        .get(tokenHash) as { invalidated: number; invalidated_at: string | null };
+      expect(row.invalidated).toBe(1);
+      expect(row.invalidated_at).not.toBeNull();
+    });
+
+    test('[US-010-AC2] any action with an expired session is rejected with 401 SESSION_EXPIRED (client redirects to login)', async () => {
+      const { token } = await loginAndExpire();
+      const { app: protectedApp, handlerCalls } = buildProtectedTestApp();
+
+      for (let i = 0; i < 2; i++) {
+        const response = await request(protectedApp).get('/protected').set('Authorization', `Bearer ${token}`).expect(401);
+        expect(response.body.error_code).toBe('SESSION_EXPIRED');
+      }
+      expect(handlerCalls.count).toBe(0);
+    });
+
+    test('[US-010-AC3] the expiry response carries a machine-readable code and a user-facing message', async () => {
+      const { token } = await loginAndExpire();
+      const { app: protectedApp } = buildProtectedTestApp();
+
+      const response = await request(protectedApp).get('/protected').set('Authorization', `Bearer ${token}`).expect(401);
+
+      expect(response.body.error_code).toBe('SESSION_EXPIRED');
+      expect(response.body.message).toMatch(/expired/i);
+    });
+
+    test('[US-010-AC4] an expired session stays rejected until the user re-authenticates with credentials', async () => {
+      const { email, password, token } = await loginAndExpire();
+      const { app: protectedApp, handlerCalls } = buildProtectedTestApp();
+
+      await request(protectedApp).get('/protected').set('Authorization', `Bearer ${token}`).expect(401);
+      // Retrying later (and after the first lazy invalidation) must not revive it.
+      await request(protectedApp).get('/protected').set('Authorization', `Bearer ${token}`).expect(401);
+      expect(handlerCalls.count).toBe(0);
+
+      const relogin = await request(app).post('/api/v1/auth/login').send({ email, password }).expect(200);
+      await request(protectedApp)
+        .get('/protected')
+        .set('Authorization', `Bearer ${relogin.body.token}`)
+        .expect(200);
+    });
+  });
+
   test('suspending a user cascades to invalidate all of their sessions on next use (EC-003)', async () => {
     const { userId, email, password } = await registerAndActivateUser();
     const loginResponse = await request(app).post('/api/v1/auth/login').send({ email, password }).expect(200);

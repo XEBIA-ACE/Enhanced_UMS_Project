@@ -102,11 +102,13 @@ export class SessionRepository implements ISessionRepository {
   }
 
   /**
-   * Mark a single session as invalidated (logout — FR-005, EC-002).
+   * Mark a single session as invalidated (logout — FR-005, EC-002; timeout
+   * expiry — US-010). The `invalidated = 0` guard makes the transition atomic
+   * and idempotent: concurrent callers cannot overwrite invalidated_at.
    */
   async markInvalidated(id: string, invalidatedAt: Date): Promise<void> {
     this.db
-      .prepare('UPDATE sessions SET invalidated = 1, invalidated_at = ? WHERE id = ?')
+      .prepare('UPDATE sessions SET invalidated = 1, invalidated_at = ? WHERE id = ? AND invalidated = 0')
       .run(invalidatedAt.toISOString(), id);
   }
 

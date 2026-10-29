@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowRight, AlertCircle, LogIn } from "lucide-react";
 import { FormField } from "../molecules/FormField";
 import { PasswordInput } from "../molecules/PasswordInput";
 import { loginUser } from "../../lib/api-client";
-import { setSession } from "../../lib/session";
+import {
+  setSession,
+  hasSessionExpiredNotice,
+  clearSessionExpiredNotice,
+  SESSION_EXPIRED_MESSAGE,
+} from "../../lib/session";
 
 /* ── Validation ───────────────────────────────────────── */
 const validate = {
@@ -107,6 +112,11 @@ export function LoginForm() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [authError, setAuthError] = useState("");
   const [loading, setLoading] = useState(false);
+  // [US-010-AC3] Shown once when the user was redirected here by an expired session.
+  const [expiredNotice] = useState(hasSessionExpiredNotice);
+  useEffect(() => {
+    clearSessionExpiredNotice();
+  }, []);
 
   const setField = (key: keyof typeof fields) => (v: string) => {
     setFields((prev) => ({ ...prev, [key]: v }));
@@ -185,6 +195,21 @@ export function LoginForm() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+        {/* Session-expiry notice */}
+        {expiredNotice && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-start gap-2.5 px-4 py-3 rounded-md border"
+            style={{ backgroundColor: "#FFF8E1", borderColor: "#F9A825" }}
+          >
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" aria-hidden="true" style={{ color: "#F57F17" }} />
+            <p style={{ color: "#5D4037", fontSize: "14px", lineHeight: "20px" }}>
+              {SESSION_EXPIRED_MESSAGE}
+            </p>
+          </div>
+        )}
+
         {/* Auth error banner */}
         {authError && <AuthErrorBanner message={authError} />}
 

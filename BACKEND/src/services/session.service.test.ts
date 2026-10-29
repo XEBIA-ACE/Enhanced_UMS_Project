@@ -130,6 +130,27 @@ describe('DefaultSessionService', () => {
       expect(result).toEqual({ valid: false, reason: 'EXPIRED' });
     });
 
+    test('[US-010-AC1] persists invalidation when an active session reaches its timeout', async () => {
+      sessionRepository.findByTokenHash.mockResolvedValue(
+        buildSession({ id: 'session-9', expiresAt: new Date(Date.now() - 1000) }),
+      );
+
+      await service.validateSession('some-raw-token');
+
+      expect(sessionRepository.markInvalidated).toHaveBeenCalledWith('session-9', expect.any(Date));
+    });
+
+    test('[US-010-AC1] does not re-invalidate an expired session that is already invalidated', async () => {
+      sessionRepository.findByTokenHash.mockResolvedValue(
+        buildSession({ invalidated: true, expiresAt: new Date(Date.now() - 1000) }),
+      );
+
+      const result = await service.validateSession('some-raw-token');
+
+      expect(result).toEqual({ valid: false, reason: 'EXPIRED' });
+      expect(sessionRepository.markInvalidated).not.toHaveBeenCalled();
+    });
+
     test('treats expiresAt === now as expired (boundary)', async () => {
       const now = new Date('2026-03-01T12:00:00.000Z');
       jest.useFakeTimers().setSystemTime(now);
