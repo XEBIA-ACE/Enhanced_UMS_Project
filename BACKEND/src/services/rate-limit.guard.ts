@@ -24,6 +24,50 @@ export interface RateLimitGuard {
 // Implementation
 // ---------------------------------------------------------------------------
 
+export interface IpRateLimitDecision {
+  allowed: boolean;
+  /** Seconds until the current window resets (meaningful when blocked). */
+  retryAfterSeconds: number;
+}
+
+export interface IpRateLimitGuard {
+  allow(ipAddress: string): Promise<IpRateLimitDecision>;
+}
+
+/**
+ * Per-IP counter, key `{scope}:rl:ip:{ip}`. The TTL is set on the first
+ * attempt only, so the window runs from the first attempt (US-006 FR-005);
+ * blocked attempts still count but never extend the window.
+ */
+export class RedisIpRateLimitGuard implements IpRateLimitGuard {
+  constructor(
+    private readonly redis: Redis,
+    private readonly scope: string,
+    private readonly maxAttemptsPerWindow: number = 5,
+    private readonly windowMinutes: number = 15,
+  ) {}
+
+  async allow(ipAddress: string): Promise<IpRateLimitDecision> {
+    const key = `${this.scope}:rl:ip:${ipAddress}`;
+    const windowSeconds = this.windowMinutes * 60;
+
+    const attemptCount = await this.redis.incr(key);
+    let ttl = windowSeconds;
+    if (attemptCount === 1) {
+      await this.redis.expire(key, windowSeconds);
+    } else {
+      ttl = await this.redis.ttl(key);
+      if (ttl < 0) {
+        // Key lost its TTL (e.g. crash between INCR and EXPIRE): heal it.
+        await this.redis.expire(key, windowSeconds);
+        ttl = windowSeconds;
+      }
+    }
+
+    return { allowed: attemptCount <= this.maxAttemptsPerWindow, retryAfterSeconds: ttl };
+  }
+}
+
 export class RedisRateLimitGuard implements RateLimitGuard {
   constructor(
     private readonly redis: Redis,

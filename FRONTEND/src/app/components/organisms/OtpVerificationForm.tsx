@@ -125,6 +125,8 @@ export function OtpVerificationForm({ email, userId }: OtpVerificationFormProps)
       const result = await resendOtp({ userId });
       if (result.ok && result.data.status === "dispatch_failed") {
         setError("We couldn't resend the code right now. Please try again shortly.");
+      } else if (!result.ok && result.body.errorCode === "OTP_RATE_LIMIT_EXCEEDED") {
+        setError(result.body.message ?? "Too many attempts. You are temporarily blocked; please try again later.");
       } else if (!result.ok) {
         setError("We couldn't resend the code right now. Please try again shortly.");
       }

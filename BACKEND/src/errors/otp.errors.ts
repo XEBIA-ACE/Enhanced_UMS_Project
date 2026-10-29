@@ -12,12 +12,34 @@
 
 export class OtpRateLimitExceededError extends Error {
   public readonly userId: string;
+  public readonly retryAfterSeconds?: number;
 
-  constructor(userId: string) {
+  constructor(userId: string, retryAfterSeconds?: number) {
     super(`OTP rate limit exceeded for user '${userId}'.`);
     this.name = 'OtpRateLimitExceededError';
     this.userId = userId;
+    this.retryAfterSeconds = retryAfterSeconds;
     Object.setPrototypeOf(this, OtpRateLimitExceededError.prototype);
+  }
+}
+
+/**
+ * Raised when a client IP address has used up its registration attempt
+ * quota for the current window (US-006). The message states that the block
+ * is temporary and when it lifts.
+ */
+export class IpRateLimitExceededError extends OtpRateLimitExceededError {
+  public readonly ipAddress: string;
+
+  constructor(ipAddress: string, retryAfterSeconds: number) {
+    super(ipAddress, retryAfterSeconds);
+    const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+    this.message =
+      `Too many registration attempts from your IP address. You are temporarily blocked; ` +
+      `this restriction is temporary — please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+    this.name = 'IpRateLimitExceededError';
+    this.ipAddress = ipAddress;
+    Object.setPrototypeOf(this, IpRateLimitExceededError.prototype);
   }
 }
 

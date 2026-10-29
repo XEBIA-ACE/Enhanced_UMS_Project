@@ -18,7 +18,9 @@ import type { Database } from 'better-sqlite3';
 import { Redis } from 'ioredis';
 import { UserRepository } from '../repositories/user.repository';
 import { OtpRequestRepository } from '../repositories/otp-request.repository';
-import { RedisRateLimitGuard } from '../services/rate-limit.guard';
+import { RedisRateLimitGuard, RedisIpRateLimitGuard } from '../services/rate-limit.guard';
+import { createIpRateLimitMiddleware } from '../middleware/ip-rate-limit.middleware';
+import { otpConfig } from '../config/otp.config';
 import { DefaultOtpService } from '../services/otp.service';
 import { OtpDeliveryPort } from '../adapters/otp-delivery.port';
 import { OtpController } from '../controllers/otp.controller';
@@ -37,7 +39,9 @@ export function createOtpRouter(db: Database, redis: Redis, otpDeliveryPort: Otp
   );
 
   // POST /api/v1/otp/send
-  router.post('/send', (req, res) => { void controller.sendOtp(req, res); });
+  router.post('/send', createIpRateLimitMiddleware(
+    new RedisIpRateLimitGuard(redis, 'otp-send', otpConfig.otpMaxAttemptsPerWindow, otpConfig.otpRateLimitWindowMinutes),
+  ), (req, res) => { void controller.sendOtp(req, res); });
 
   // POST /api/v1/otp/resend
   router.post('/resend', (req, res) => { void controller.resendOtp(req, res); });
