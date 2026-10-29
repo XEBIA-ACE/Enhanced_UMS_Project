@@ -71,6 +71,15 @@ export class DefaultRegistrationService implements RegistrationService {
              VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL)`,
           )
           .run(userId, dto.username, usernameNormalised, dto.emailAddress, passwordHash, now.toISOString());
+
+        // Same transaction as the user row: a committed user always has a
+        // durable record that OTP initiation is owed (US-017 FR-004).
+        this.db
+          .prepare(
+            `INSERT INTO otp_dispatch_outbox (id, user_id, status, attempts, created_at, updated_at)
+             VALUES (?, ?, 'pending', 0, ?, ?)`,
+          )
+          .run(uuidv4(), userId, now.toISOString(), now.toISOString());
       });
 
       return {
