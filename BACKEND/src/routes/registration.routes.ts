@@ -15,6 +15,7 @@ import { DefaultEmailUniquenessValidator } from '../validators/email-uniqueness.
 import { DefaultUsernameUniquenessValidator } from '../validators/username-uniqueness.validator';
 import { UserRepository } from '../repositories/user.repository';
 import { OtpRequestRepository } from '../repositories/otp-request.repository';
+import { OtpDispatchOutboxRepository } from '../repositories/otp-dispatch-outbox.repository';
 import { DefaultRegistrationService } from '../services/registration.service';
 import { DefaultOtpService } from '../services/otp.service';
 import { RedisRateLimitGuard } from '../services/rate-limit.guard';
@@ -50,6 +51,7 @@ export function createRegistrationRouter(
     new DefaultEmailUniquenessValidator(userRepo),
     new DefaultRegistrationService(db),
     otpService,
+    new OtpDispatchOutboxRepository(db),
   );
 
   // POST /api/v1/users/register  (parent mounts at /api/v1/users)

@@ -11,6 +11,11 @@ import { SendGridEmailAdapter } from './adapters/sendgrid-email.adapter';
 import { EmailOtpDeliveryAdapter } from './adapters/email-otp-delivery.adapter';
 import { OutboxWorker } from './workers/outbox.worker';
 import { AccountDeletionNotificationWorker } from './workers/account-deletion-notification.worker';
+import { OtpDispatchWorker } from './workers/otp-dispatch.worker';
+import { OtpDispatchOutboxRepository } from './repositories/otp-dispatch-outbox.repository';
+import { OtpRequestRepository } from './repositories/otp-request.repository';
+import { DefaultOtpService } from './services/otp.service';
+import { RedisRateLimitGuard } from './services/rate-limit.guard';
 import { otpConfig } from './config/otp.config';
 
 const db = createDb();
@@ -37,7 +42,19 @@ const accountDeletionNotificationWorker = new AccountDeletionNotificationWorker(
   emailDeliveryPort,
 );
 
+const otpDispatchWorker = new OtpDispatchWorker(
+  new OtpDispatchOutboxRepository(db),
+  new DefaultOtpService(
+    userRepository,
+    new OtpRequestRepository(db),
+    new RedisRateLimitGuard(otpRedisClient),
+    otpDeliveryPort,
+    db,
+  ),
+);
+
 outboxWorker.start();
+otpDispatchWorker.start();
 accountDeletionNotificationWorker.start();
 
 const port = parseInt(process.env.PORT ?? '3000', 10);
@@ -48,6 +65,7 @@ const server = app.listen(port, () => {
 function shutdown(): void {
   console.log('Shutting down gracefully...');
   outboxWorker.stop();
+  otpDispatchWorker.stop();
   accountDeletionNotificationWorker.stop();
   server.close(() => {
     db.close();

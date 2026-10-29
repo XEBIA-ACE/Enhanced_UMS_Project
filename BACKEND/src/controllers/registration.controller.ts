@@ -24,6 +24,7 @@ import { EmailUniquenessValidator } from '../validators/email-uniqueness.validat
 import { UsernameUniquenessValidator } from '../validators/username-uniqueness.validator';
 import { RegistrationService } from '../services/registration.service';
 import { OtpService } from '../services/otp.service';
+import { IOtpDispatchOutboxRepository } from '../repositories/otp-dispatch-outbox.repository';
 import { RegistrationRequestDto } from '../types/registration.types';
 import { ValidationError, UsernameConflictError, EmailConflictError } from '../errors/registration.errors';
 import { passwordPolicyConfig } from '../config/password-policy.config';
@@ -46,6 +47,7 @@ export class RegistrationController {
     private readonly emailUniquenessValidator: EmailUniquenessValidator,
     private readonly registrationService: RegistrationService,
     private readonly otpService: OtpService,
+    private readonly otpOutbox?: IOtpDispatchOutboxRepository,
   ) {}
 
   /**
@@ -119,11 +121,16 @@ export class RegistrationController {
     try {
       const result = await this.registrationService.register(dto);
 
-      // Dispatch the activation OTP email. OtpService never throws on
-      // dispatch failure (it records status 'failed' for observability and
-      // still resolves), so registration always returns 201 once the user
-      // row is committed.
-      await this.otpService.sendOtp(result.userId);
+      // Initiate OTP verification before responding. The user row and an
+      // otp_dispatch_outbox row were committed together, so if issueOtp fails
+      // (rate limit, DB error, ...) OtpDispatchWorker retries it and the
+      // registration still succeeds — the user is never stranded with a 500.
+      try {
+        await this.otpService.sendOtp(result.userId);
+        this.otpOutbox?.markDone(result.userId);
+      } catch (otpErr) {
+        console.error('OTP initiation failed after registration; queued for retry:', otpErr);
+      }
 
       res.status(201).json({ userId: result.userId, message: result.message });
     } catch (err) {
